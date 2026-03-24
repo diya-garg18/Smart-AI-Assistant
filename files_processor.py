@@ -1,6 +1,7 @@
 import os
 import fitz
 import docx
+from pptx import Presentation
 
 def process_files(paths):
     all_chunks = []
@@ -13,6 +14,8 @@ def process_files(paths):
             chunks = _process_docx(path)
         elif ext == ".txt":
             chunks = _process_txt(path)
+        elif ext == ".pptx":
+            chunks = _process_pptx(path)
         else:
             print(f"    -> Unsupported file type, skipping")
             continue
@@ -43,6 +46,19 @@ def _process_txt(path):
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         text = f.read().strip()
     return _chunk_text(text, 1, filename)
+
+def _process_pptx(path):
+    prs = Presentation(path)
+    chunks = []
+    filename = os.path.basename(path)
+    for slide_num, slide in enumerate(prs.slides, 1):
+        text = ""
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text.strip():
+                text += shape.text.strip() + "\n"
+        if text.strip():
+            chunks.extend(_chunk_text(text.strip(), slide_num, filename))
+    return chunks
 
 def _chunk_text(text, page, source):
     chunks = []

@@ -14,10 +14,11 @@ def pick_files():
     files = filedialog.askopenfilenames(
         title="Select files",
         filetypes=[
-            ("Supported files", "*.pdf *.docx *.txt"),
+            ("Supported files", "*.pdf *.docx *.txt *.pptx"),
             ("PDF files", "*.pdf"),
             ("Word documents", "*.docx"),
             ("Text files", "*.txt"),
+            ("PowerPoint files", "*.pptx"),
         ]
     )
     root.destroy()
@@ -26,7 +27,7 @@ def pick_files():
 def main():
     store = VectorStore()
 
-    print("=== Smart AI Assistant v4 - PDF + Word + TXT ===\n")
+    print("=== Smart AI Assistant v5 - PDF + Word + TXT + PPT ===\n")
     print("How do you want to load files?")
     print("  1. Browse and select files (file picker)")
     print("  2. Type file paths manually")
@@ -50,8 +51,8 @@ def main():
             if not os.path.exists(path):
                 print(f"  File not found: {path}")
                 continue
-            if not path.lower().endswith((".pdf", ".docx", ".txt")):
-                print(f"  Unsupported file type (use .pdf, .docx, .txt): {path}")
+            if not path.lower().endswith((".pdf", ".docx", ".txt", ".pptx")):
+                print(f"  Unsupported type (use .pdf .docx .txt .pptx): {path}")
                 continue
             file_paths.append(path)
     else:
