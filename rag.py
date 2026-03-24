@@ -10,10 +10,14 @@ def ask(question, store, history):
     results = store.search(question)
 
     if not results:
-        return "I couldn't find relevant information in the document.", []
+        return "I couldn't find relevant information in the documents.", []
 
-    context = "\n\n".join([f"[Page {c['page']}] {c['text']}" for c, _ in results])
-    sources = list(set([f"Page {c['page']}" for c, _ in results]))
+    context = "\n\n".join([
+        f"[Source: {c['source']} | Page {c['page']}]\n{c['text']}"
+        for c, _ in results
+    ])
+
+    sources = list(set([f"{c['source']} (Page {c['page']})" for c, _ in results]))
 
     memory = ""
     if history:
@@ -25,8 +29,9 @@ def ask(question, store, history):
 Document context:
 {context}
 
-Answer the question using ONLY the document context above. Cite page numbers.
-If the answer isn't in the document, say so.
+Answer the question using ONLY the document context above.
+Always cite which file and page number your answer comes from.
+If the answer isn't in the documents, say so.
 
 Question: {question}"""
 

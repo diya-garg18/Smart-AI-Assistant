@@ -11,9 +11,11 @@ class VectorStore:
     def add(self, chunks):
         self.chunks = chunks
         texts = [c["text"] for c in chunks]
-        self.embeddings = self.model.encode(texts, normalize_embeddings=True, show_progress_bar=True)
+        self.embeddings = self.model.encode(
+            texts, normalize_embeddings=True, show_progress_bar=True
+        )
 
-    def search(self, query, top_k=4):
+    def search(self, query, top_k=5):
         if self.embeddings is None:
             return []
         q = self.model.encode(query, normalize_embeddings=True)
