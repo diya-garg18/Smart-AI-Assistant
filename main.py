@@ -2,7 +2,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog
 from dotenv import load_dotenv
-from pdf_processor import process_pdfs
+from pdf_processor import process_files
 from vector_store import VectorStore
 from rag import ask
 
@@ -12,8 +12,12 @@ def pick_files():
     root = tk.Tk()
     root.withdraw()
     files = filedialog.askopenfilenames(
-        title="Select PDF files",
-        filetypes=[("PDF files", "*.pdf")]
+        title="Select PDF or Word files",
+        filetypes=[
+            ("Supported files", "*.pdf *.docx"),
+            ("PDF files", "*.pdf"),
+            ("Word documents", "*.docx"),
+        ]
     )
     root.destroy()
     return list(files)
@@ -21,52 +25,52 @@ def pick_files():
 def main():
     store = VectorStore()
 
-    print("=== Smart AI Assistant v2 - Multiple PDFs ===\n")
-    print("How do you want to load PDFs?")
+    print("=== Smart AI Assistant v3 - PDF + Word Docs ===\n")
+    print("How do you want to load files?")
     print("  1. Browse and select files (file picker)")
     print("  2. Type file paths manually")
     choice = input("\nEnter 1 or 2: ").strip()
 
-    pdf_paths = []
+    file_paths = []
 
     if choice == "1":
         print("\nA file picker window will open...")
-        pdf_paths = pick_files()
-        if not pdf_paths:
+        file_paths = pick_files()
+        if not file_paths:
             print("No files selected.")
             return
 
     elif choice == "2":
-        print("\nEnter PDF paths one by one. Press Enter with no input when done.")
+        print("\nEnter file paths one by one. Press Enter with no input when done.")
         while True:
-            path = input("PDF path: ").strip().strip('"')
+            path = input("File path: ").strip().strip('"')
             if not path:
                 break
             if not os.path.exists(path):
                 print(f"  File not found: {path}")
                 continue
-            if not path.lower().endswith(".pdf"):
-                print(f"  Not a PDF: {path}")
+            if not path.lower().endswith((".pdf", ".docx")):
+                print(f"  Unsupported file type (use .pdf or .docx): {path}")
                 continue
-            pdf_paths.append(path)
+            file_paths.append(path)
     else:
         print("Invalid choice.")
         return
 
-    if not pdf_paths:
-        print("No valid PDFs provided.")
+    if not file_paths:
+        print("No valid files provided.")
         return
 
-    print(f"\nLoading {len(pdf_paths)} PDF(s)...")
-    chunks = process_pdfs(pdf_paths)
+    print(f"\nLoading {len(file_paths)} file(s)...")
+    chunks = process_files(file_paths)
     store.add(chunks)
 
-    print(f"\nDone. {len(chunks)} chunks loaded from {len(pdf_paths)} PDF(s).")
-    for p in pdf_paths:
+    print(f"\nDone. {len(chunks)} chunks loaded.")
+    for p in file_paths:
         print(f"  - {os.path.basename(p)}")
 
     print("\nAsk questions about your documents. Type 'exit' to quit.")
-    print("Type 'sources' to see which PDFs are loaded.\n")
+    print("Type 'sources' to see loaded files.\n")
 
     history = []
 
@@ -75,7 +79,7 @@ def main():
         if question.lower() == "exit":
             break
         if question.lower() == "sources":
-            for p in pdf_paths:
+            for p in file_paths:
                 print(f"  - {os.path.basename(p)}")
             print()
             continue
