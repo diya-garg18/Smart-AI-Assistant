@@ -1,8 +1,4 @@
 import os
-import shutil
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from dotenv import load_dotenv
 from files_processor import process_files
 from vector_store import VectorStore
@@ -10,89 +6,61 @@ from rag import ask
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
-app = FastAPI()
+def main():
+    store = VectorStore()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    print("=== Smart AI Assistant v5 - PDF + Word + TXT + PPT ===\n")
 
-UPLOAD_DIR = "uploaded_files"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+    # 👉 Only terminal input now
+    paths = input("Enter file paths (comma separated): ").strip()
+    file_paths = [p.strip().strip('"') for p in paths.split(",")]
 
-store = VectorStore()
-loaded_files = []
-history = []
+    valid_paths = []
+    for path in file_paths:
+        if not os.path.exists(path):
+            print(f"File not found: {path}")
+            continue
+        if not path.lower().endswith((".pdf", ".docx", ".txt", ".pptx")):
+            print(f"Unsupported file type: {path}")
+            continue
+        valid_paths.append(path)
 
+    file_paths = valid_paths
 
-class QuestionRequest(BaseModel):
-    question: str
+    if not file_paths:
+        print("No valid files provided.")
+        return
 
-
-@app.get("/status")
-def status():
-    return {
-        "files_loaded": len(loaded_files),
-        "filenames": [os.path.basename(f) for f in loaded_files]
-    }
-
-
-@app.post("/upload")
-async def upload(files: list[UploadFile] = File(...)):
-    global loaded_files, history
-
-    ALLOWED = {".pdf", ".docx", ".txt", ".pptx"}
-    saved_paths = []
-
-    for file in files:
-        ext = os.path.splitext(file.filename)[1].lower()
-        if ext not in ALLOWED:
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.filename}")
-
-        path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(path, "wb") as f:
-            shutil.copyfileobj(file.file, f)
-        saved_paths.append(path)
-
-    chunks = process_files(saved_paths)
+    print(f"\nLoading {len(file_paths)} file(s)...")
+    chunks = process_files(file_paths)
     store.add(chunks)
 
-    loaded_files.extend(saved_paths)
+    print(f"\nDone. {len(chunks)} chunks loaded.")
+    for p in file_paths:
+        print(f"  - {os.path.basename(p)}")
+
+    print("\nAsk questions about your documents. Type 'exit' to quit.")
+    print("Type 'sources' to see loaded files.\n")
+
     history = []
 
-    return {
-        "message": f"{len(saved_paths)} file(s) uploaded and processed",
-        "filenames": [os.path.basename(p) for p in saved_paths],
-        "chunks": len(chunks)
-    }
+    while True:
+        question = input("You: ").strip()
+        if question.lower() == "exit":
+            break
+        if question.lower() == "sources":
+            for p in file_paths:
+                print(f"  - {os.path.basename(p)}")
+            print()
+            continue
+        if not question:
+            continue
 
+        answer, sources = ask(question, store, history)
+        print(f"\nAnswer: {answer}")
+        print(f"Sources: {sources}\n")
 
-@app.post("/ask")
-async def ask_question(request: QuestionRequest):
-    if not loaded_files:
-        raise HTTPException(status_code=400, detail="No files loaded. Upload files first.")
+        history.append({"question": question, "answer": answer})
 
-    if not request.question.strip():
-        raise HTTPException(status_code=400, detail="Question cannot be empty.")
-
-    answer, sources = ask(request.question, store, history)
-    history.append({"question": request.question, "answer": answer})
-
-    return {
-        "answer": answer,
-        "sources": sources
-    }
-
-
-@app.delete("/reset")
-def reset():
-    global loaded_files, history
-    store.chunks = []
-    store.embeddings = None
-    loaded_files = []
-    history = []
-    shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    return {"message": "All documents cleared"}
+if __name__ == "__main__":
+    main()
