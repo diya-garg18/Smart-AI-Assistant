@@ -1,98 +1,98 @@
 import os
-import tkinter as tk
-from tkinter import filedialog
+import shutil
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from dotenv import load_dotenv
-from pdf_processor import process_files
+from files_processor import process_files
 from vector_store import VectorStore
 from rag import ask
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
-def pick_files():
-    root = tk.Tk()
-    root.withdraw()
-    files = filedialog.askopenfilenames(
-        title="Select files",
-        filetypes=[
-            ("Supported files", "*.pdf *.docx *.txt *.pptx"),
-            ("PDF files", "*.pdf"),
-            ("Word documents", "*.docx"),
-            ("Text files", "*.txt"),
-            ("PowerPoint files", "*.pptx"),
-        ]
-    )
-    root.destroy()
-    return list(files)
+app = FastAPI()
 
-def main():
-    store = VectorStore()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    print("=== Smart AI Assistant v5 - PDF + Word + TXT + PPT ===\n")
-    print("How do you want to load files?")
-    print("  1. Browse and select files (file picker)")
-    print("  2. Type file paths manually")
-    choice = input("\nEnter 1 or 2: ").strip()
+UPLOAD_DIR = "uploaded_files"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    file_paths = []
+store = VectorStore()
+loaded_files = []
+history = []
 
-    if choice == "1":
-        print("\nA file picker window will open...")
-        file_paths = pick_files()
-        if not file_paths:
-            print("No files selected.")
-            return
 
-    elif choice == "2":
-        print("\nEnter file paths one by one. Press Enter with no input when done.")
-        while True:
-            path = input("File path: ").strip().strip('"')
-            if not path:
-                break
-            if not os.path.exists(path):
-                print(f"  File not found: {path}")
-                continue
-            if not path.lower().endswith((".pdf", ".docx", ".txt", ".pptx")):
-                print(f"  Unsupported type (use .pdf .docx .txt .pptx): {path}")
-                continue
-            file_paths.append(path)
-    else:
-        print("Invalid choice.")
-        return
+class QuestionRequest(BaseModel):
+    question: str
 
-    if not file_paths:
-        print("No valid files provided.")
-        return
 
-    print(f"\nLoading {len(file_paths)} file(s)...")
-    chunks = process_files(file_paths)
+@app.get("/status")
+def status():
+    return {
+        "files_loaded": len(loaded_files),
+        "filenames": [os.path.basename(f) for f in loaded_files]
+    }
+
+
+@app.post("/upload")
+async def upload(files: list[UploadFile] = File(...)):
+    global loaded_files, history
+
+    ALLOWED = {".pdf", ".docx", ".txt", ".pptx"}
+    saved_paths = []
+
+    for file in files:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in ALLOWED:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.filename}")
+
+        path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        saved_paths.append(path)
+
+    chunks = process_files(saved_paths)
     store.add(chunks)
 
-    print(f"\nDone. {len(chunks)} chunks loaded.")
-    for p in file_paths:
-        print(f"  - {os.path.basename(p)}")
-
-    print("\nAsk questions about your documents. Type 'exit' to quit.")
-    print("Type 'sources' to see loaded files.\n")
-
+    loaded_files.extend(saved_paths)
     history = []
 
-    while True:
-        question = input("You: ").strip()
-        if question.lower() == "exit":
-            break
-        if question.lower() == "sources":
-            for p in file_paths:
-                print(f"  - {os.path.basename(p)}")
-            print()
-            continue
-        if not question:
-            continue
+    return {
+        "message": f"{len(saved_paths)} file(s) uploaded and processed",
+        "filenames": [os.path.basename(p) for p in saved_paths],
+        "chunks": len(chunks)
+    }
 
-        answer, sources = ask(question, store, history)
-        print(f"\nAnswer: {answer}")
-        print(f"Sources: {sources}\n")
 
-        history.append({"question": question, "answer": answer})
+@app.post("/ask")
+async def ask_question(request: QuestionRequest):
+    if not loaded_files:
+        raise HTTPException(status_code=400, detail="No files loaded. Upload files first.")
 
-if __name__ == "__main__":
-    main()
+    if not request.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    answer, sources = ask(request.question, store, history)
+    history.append({"question": request.question, "answer": answer})
+
+    return {
+        "answer": answer,
+        "sources": sources
+    }
+
+
+@app.delete("/reset")
+def reset():
+    global loaded_files, history
+    store.chunks = []
+    store.embeddings = None
+    loaded_files = []
+    history = []
+    shutil.rmtree(UPLOAD_DIR, ignore_errors=True)
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    return {"message": "All documents cleared"}
