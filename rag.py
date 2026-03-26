@@ -4,20 +4,22 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
-def ask(question, store, history):
+def ask(question, store, history, min_score=0.1, debug=False):
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-    results = store.search(question)
+    results = store.search(question, top_k=10)
 
     if not results:
+        if debug:
+            return "I couldn't find relevant information in the documents.", [], []
         return "I couldn't find relevant information in the documents.", []
 
     context = "\n\n".join([
-        f"[Source: {c['source']} | Page {c['page']}]\n{c['text']}"
-        for c, _ in results
+        f"[Source: {c['source']} | Page {c['page']} | Score: {score:.4f}]\n{c['text']}"
+        for (c, score) in results
     ])
 
-    sources = list(set([f"{c['source']} (Page {c['page']})" for c, _ in results]))
+    sources = list({f"{c['source']} (Page {c['page']})" for (c, _) in results})
 
     memory = ""
     if history:
@@ -41,5 +43,8 @@ Question: {question}"""
         max_tokens=1024,
         temperature=0.2
     )
+
+    if debug:
+        return response.choices[0].message.content.strip(), sources, results
 
     return response.choices[0].message.content.strip(), sources

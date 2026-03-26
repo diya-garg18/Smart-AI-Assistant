@@ -21,4 +21,8 @@ class VectorStore:
         q = self.model.encode(query, normalize_embeddings=True)
         scores = self.embeddings @ q
         top = np.argsort(scores)[::-1][:top_k]
-        return [(self.chunks[i], float(scores[i])) for i in top if scores[i] > 0.3]
+        # Include top results for debugging and avoid false negatives from strict threshold.
+        matches = [(self.chunks[i], float(scores[i])) for i in top]
+        # By default return all top results; 0.1 threshold may help in low-sim situations.
+        filtered = [m for m in matches if m[1] >= 0.1]
+        return filtered if filtered else matches
