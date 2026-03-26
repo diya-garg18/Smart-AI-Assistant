@@ -14,6 +14,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const notificationContainer = document.getElementById('notification-container');
 
+    // Create and inject re-indexing overlay for file list
+    const reindexOverlay = document.createElement('div');
+    reindexOverlay.className = 'file-list-loading-overlay';
+    reindexOverlay.innerHTML = `
+        <div class="reindex-spinner"></div>
+        <div class="reindex-text">Updating Index...</div>
+    `;
+    fileList.appendChild(reindexOverlay);
+
     const API_BASE = ''; // Backend is on the same origin
 
     // --- UTILS ---
@@ -91,17 +100,55 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateFileList(filenames) {
+        console.log(`[ui] Updating file list with ${filenames ? filenames.length : 0} items:`, filenames);
+        // Keep the loading overlay if it exists
+        const overlay = fileList.querySelector('.file-list-loading-overlay');
+        
         if (!filenames || filenames.length === 0) {
-            fileList.innerHTML = '<p style="text-align:center; color: var(--text-muted); font-size: 0.8rem;">No documents loaded yet.</p>';
+            fileList.innerHTML = '<p style="text-align:center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No documents loaded yet.</p>';
+            if (overlay) fileList.appendChild(overlay);
             return;
         }
 
-        fileList.innerHTML = filenames.map(name => `
-            <div class="file-item">
+        const itemsHtml = filenames.map(name => `
+            <div class="file-item" data-filename="${name}">
                 <i class="fas fa-file-alt"></i>
-                <span title="${name}">${name.length > 25 ? name.substring(0, 22) + '...' : name}</span>
+                <span class="file-name" title="${name}">${name.length > 25 ? name.substring(0, 22) + '...' : name}</span>
+                <button class="btn-delete-file" title="Delete file" data-filename="${name}">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
         `).join('');
+
+        fileList.innerHTML = itemsHtml;
+        if (overlay) fileList.appendChild(overlay);
+    }
+
+    async function deleteFile(filename) {
+        console.log(`[delete] Requesting deletion of: ${filename}`);
+        fileList.classList.add('loading');
+        try {
+            const response = await fetch(`${API_BASE}/delete-file`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename })
+            });
+
+            let data = {};
+            try { data = await response.json(); } catch (_) {}
+            console.log(`[delete] Server responded:`, data);
+
+            if (response.ok) {
+                showNotification(`Deleted file "${filename.split('_').slice(1).join('_') || filename}"`, 'success');
+                updateFileList(data.filenames || []);
+            } else {
+                showNotification(data.detail || `Delete failed (${response.status})`, 'error');
+            }
+        } catch (err) {
+            showNotification('Network error — check backend connection', 'error');
+        } finally {
+            fileList.classList.remove('loading');
+        }
     }
 
     async function uploadFiles(files) {
@@ -141,6 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             xhr.onload = () => {
                 progressContainer.style.display = 'none';
+                fileList.classList.remove('loading');
                 if (xhr.status >= 200 && xhr.status < 300) {
                     const data = JSON.parse(xhr.responseText);
                     showNotification(data.message, 'success');
@@ -156,11 +204,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             xhr.onerror = () => {
                 progressContainer.style.display = 'none';
+                fileList.classList.remove('loading');
                 showNotification('Error uploading files', 'error');
                 reject(new Error('Network error'));
             };
 
             xhr.open('POST', `${API_BASE}/upload`);
+            fileList.classList.add('loading');
             xhr.send(formData);
         });
     }
@@ -258,6 +308,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Reset
     resetBtn.addEventListener('click', resetDocuments);
+
+    // Per-file delete (event delegation)
+    fileList.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-delete-file');
+        if (!btn) return;
+        const filename = btn.dataset.filename;
+        if (filename && confirm(`Remove "${filename.split('_').slice(1).join('_') || filename}" from the knowledge base?`)) {
+            deleteFile(filename);
+        }
+    });
 
     // Initial load
     checkStatus();
