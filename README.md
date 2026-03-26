@@ -1,92 +1,66 @@
-# Smart AI Assistant
+# Smart AI Assistant (CLI + Web UI)
 
-An AI-powered assistant that answers questions from your own documents. Upload your files, ask questions in plain English, and get accurate answers with exact source references — no guessing, no hallucination.
-
----
-
-## What It Does
-
-- Upload any combination of PDF, Word, TXT, or PowerPoint files
-- Ask questions about the content in natural language
-- Get answers based strictly on your documents — not the internet
-- See exactly which file and page number the answer came from
-- Remembers previous questions in the same session for follow-up conversations
+An AI-powered assistant that answers questions from your own documents.
+Load your files, ask questions in plain English, and get accurate answers with sources.
 
 ---
 
-## How It Works
+## 🚀 Features
+
+* Works in **terminal (CLI)** or **browser (Web UI)**
+* Supports multiple file types:
+
+  * PDF
+  * DOCX
+  * TXT
+  * PPTX
+* Answers strictly based on your documents (no hallucination)
+* Shows sources for every answer
+* Keeps conversation history in session
+
+---
+
+## 🧠 How It Works
 
 ```
-You upload documents
+You load documents
         ↓
-Text is extracted from each file page by page
+Text is extracted and split into chunks
         ↓
-Text is split into small overlapping chunks
+Each chunk → embedding (vector)
         ↓
-Each chunk is converted into embeddings (numerical vectors) locally
+Stored locally in vector store
         ↓
 You ask a question
         ↓
-The question is also converted into an embedding
+Relevant chunks are retrieved
         ↓
-Cosine similarity finds the most relevant chunks
+Sent to LLM (LLaMA via Groq)
         ↓
-Top chunks are sent to LLaMA 3 (via Groq) as context
-        ↓
-LLaMA 3 generates an answer using only that context
-        ↓
-Answer is returned with file name and page number sources
+Answer generated with sources
 ```
 
 ---
 
-## Project Architecture
+## 📁 Project Structure
 
 ```
 rag_cli/
-├── main.py              # FastAPI server — all API routes
-├── files_processor.py   # Extracts and chunks text from all file types
-├── vector_store.py      # Embeds chunks and searches by similarity
-├── rag.py               # Sends context + question to LLaMA 3, returns answer
-├── .env                 # API key (never shared or committed)
-└── requirements.txt     # All dependencies
+├── main.py              # CLI version (run in terminal)
+├── backend.py          # Flask server for web UI
+├── files_processor.py  # Extracts + chunks text
+├── vector_store.py     # Embeddings + similarity search
+├── rag.py              # LLM interaction
+├── static/             # Frontend (HTML, JS, CSS)
+├── uploads/            # Uploaded files
+├── .env                # API key (not committed)
+├── requirements.txt
+└── README.md
 ```
 
-### API Routes
-
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/status` | Check which files are currently loaded |
-| POST | `/upload` | Upload one or more documents |
-| POST | `/ask` | Ask a question, get answer + sources |
-| DELETE | `/reset` | Clear all loaded documents and memory |
-
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| API Framework | FastAPI |
-| PDF Extraction | PyMuPDF |
-| Word Extraction | python-docx |
-| PowerPoint Extraction | python-pptx |
-| Embeddings | sentence-transformers (runs locally) |
-| Vector Search | NumPy cosine similarity |
-| LLM | LLaMA 3.3 70B via Groq API (free) |
-
----
-
-## Supported File Types
-
-- `.pdf` — research papers, books, reports
-- `.docx` — Word documents, notes
-- `.txt` — plain text files
-- `.pptx` — PowerPoint presentations
-
----
-
-## Setup
+## ⚙️ Setup
 
 ### 1. Clone the repository
 
@@ -95,73 +69,128 @@ git clone https://github.com/diya-garg18/Smart-AI-Assistant.git
 cd Smart-AI-Assistant
 ```
 
+---
+
 ### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Get a free Groq API key
+---
 
-- Go to [console.groq.com](https://console.groq.com)
-- Sign up for free — no credit card required
-- Go to API Keys and create a new key
+### 3. Add API key
 
-### 4. Add your key
-
-Create a `.env` file in the project folder:
+Create a `.env` file:
 
 ```
-GROQ_API_KEY=gsk_your_key_here
+GROQ_API_KEY=your_api_key_here
 ```
-
-### 5. Run the server
-
-```bash
-python -m uvicorn main:app --reload
-```
-
-Server runs at `http://localhost:8000`
-
-Interactive API docs available at `http://localhost:8000/docs`
 
 ---
 
-## Using the API
+## ▶️ How to Run
 
-### Upload files
+You can run the project in **two ways**:
 
-```bash
-curl -X POST http://localhost:8000/upload \
-  -F "files=@document.pdf" \
-  -F "files=@notes.docx"
-```
+---
 
-### Ask a question
+# 🟢 Option 1 — CLI (Recommended)
+
+Run:
 
 ```bash
-curl -X POST http://localhost:8000/ask \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is the main topic of this document?"}'
+python main.py
 ```
 
-### Response
+Then enter file paths:
 
-```json
-{
-  "answer": "The main topic is machine learning, specifically supervised learning methods (Page 3).",
-  "sources": ["ml_book.pdf (Page 3)", "ml_book.pdf (Page 5)"]
-}
+```
+Enter file paths (comma separated):
+C:\Users\YourName\Desktop\file.pdf
 ```
 
-### Check status
+Ask questions:
+
+```
+You: summarize this document
+```
+
+---
+
+# 🌐 Option 2 — Web UI
+
+### Step 1: Start backend
 
 ```bash
-curl http://localhost:8000/status
+python backend.py
 ```
 
-### Reset
+---
 
-```bash
-curl -X DELETE http://localhost:8000/reset
+### Step 2: Open in browser
+
 ```
+http://127.0.0.1:5000
+```
+
+---
+
+## 💬 Commands (CLI)
+
+* `exit` → quit program
+* `sources` → list loaded files
+
+---
+
+## 📄 Supported File Types
+
+* `.pdf`
+* `.docx`
+* `.txt`
+* `.pptx`
+
+---
+
+## 🧰 Tech Stack
+
+| Layer         | Technology            |
+| ------------- | --------------------- |
+| Backend       | Flask                 |
+| CLI           | Python                |
+| Embeddings    | sentence-transformers |
+| Vector Search | NumPy                 |
+| LLM           | LLaMA (via Groq API)  |
+
+---
+
+## ⚠️ Notes
+
+* First run downloads embedding model (~90MB)
+* Do NOT commit `.env` file
+* `.history/` and `uploads/` should be ignored in Git
+
+---
+
+## 🚀 Example
+
+```
+python main.py
+
+Enter file paths:
+notes.pdf
+
+You: what is this about?
+Answer: ...
+Sources: ...
+```
+
+---
+
+## 🔒 Security
+
+* API keys are stored in `.env`
+* Never commit `.env` or `.history/`
+* If a key is exposed, regenerate it immediately
+
+---
