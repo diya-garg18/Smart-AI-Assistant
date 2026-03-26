@@ -112,24 +112,57 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('files', file);
         }
 
-        showNotification(`Uploading ${files.length} file(s)...`, 'info');
+        const progressContainer = document.getElementById('upload-progress-container');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const progressPercent = document.getElementById('progress-percent');
 
-        try {
-            const response = await fetch(`${API_BASE}/upload`, {
-                method: 'POST',
-                body: formData
-            });
+        progressContainer.style.display = 'block';
+        progressFill.style.width = '0%';
+        progressFill.classList.remove('processing');
+        progressText.innerText = `Uploading ${files.length} file(s)...`;
+        progressPercent.innerText = '0%';
 
-            const data = await response.json();
-            if (response.ok) {
-                showNotification(data.message, 'success');
-                checkStatus();
-            } else {
-                showNotification(data.detail || 'Upload failed', 'error');
-            }
-        } catch (error) {
-            showNotification('Error uploading files', 'error');
-        }
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const percent = Math.round((event.loaded / event.total) * 100);
+                    progressFill.style.width = percent + '%';
+                    progressPercent.innerText = percent + '%';
+                    
+                    if (percent === 100) {
+                        progressText.innerText = 'Processing & Indexing...';
+                        progressFill.classList.add('processing');
+                    }
+                }
+            };
+
+            xhr.onload = () => {
+                progressContainer.style.display = 'none';
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const data = JSON.parse(xhr.responseText);
+                    showNotification(data.message, 'success');
+                    checkStatus();
+                    resolve(data);
+                } else {
+                    let errorData = { detail: 'Upload failed' };
+                    try { errorData = JSON.parse(xhr.responseText); } catch(e) {}
+                    showNotification(errorData.detail || 'Upload failed', 'error');
+                    reject(errorData);
+                }
+            };
+
+            xhr.onerror = () => {
+                progressContainer.style.display = 'none';
+                showNotification('Error uploading files', 'error');
+                reject(new Error('Network error'));
+            };
+
+            xhr.open('POST', `${API_BASE}/upload`);
+            xhr.send(formData);
+        });
     }
 
     async function askQuestion() {
